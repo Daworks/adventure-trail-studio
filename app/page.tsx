@@ -60,8 +60,26 @@ type IconName =
   | "mapOpen"
   | "reverse"
   | "link"
+  | "help"
+  | "x"
   | "chevronLeft"
   | "chevronRight";
+
+const toolbarHelpSections: Array<{
+  description: string;
+  icon: IconName;
+  title: string;
+}> = [
+  { icon: "map", title: "카카오맵 / 오픈맵", description: "지도 공급자를 전환합니다. 카카오맵 키가 없거나 실패하면 오픈맵으로 편집을 계속할 수 있습니다." },
+  { icon: "pen", title: "편집", description: "기본 도구입니다. 포인트, 구간, 웨이포인트를 선택하고 속성 패널에서 상세 정보를 수정합니다." },
+  { icon: "route", title: "그리기", description: "지도를 클릭해 코스 포인트를 순서대로 추가합니다. 추가된 포인트는 자동으로 선으로 연결됩니다." },
+  { icon: "plusCircle", title: "삽입", description: "기존 경로 라인을 클릭해 해당 구간 사이에 새 포인트를 추가합니다." },
+  { icon: "link", title: "연결", description: "서로 다른 구간의 시작점 또는 도착점을 차례로 클릭해 하나의 구간으로 병합합니다." },
+  { icon: "mapPin", title: "핀", description: "지도 위에 주유, 식사, 캠프, 주의 같은 웨이포인트를 추가합니다." },
+  { icon: "reverse", title: "역전", description: "선택한 구간의 포인트 순서를 반대로 바꿔 출발점과 도착점을 뒤집습니다." },
+  { icon: "split", title: "나누기", description: "선택한 구간을 중간 포인트 기준으로 두 구간으로 분리합니다." },
+  { icon: "trash", title: "삭제", description: "현재 선택한 구간을 삭제합니다. 포인트 삭제는 경로를 오른쪽 클릭한 컨텍스트 메뉴에서 실행합니다." },
+];
 
 export default function EditorPage() {
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -92,6 +110,7 @@ export default function EditorPage() {
   const [showPointHandles, setShowPointHandles] = useState(true);
   const [showRoutes, setShowRoutes] = useState(true);
   const [showWaypoints, setShowWaypoints] = useState(true);
+  const [showToolbarHelp, setShowToolbarHelp] = useState(false);
   const [routeColor, setRouteColor] = useState(defaultRouteColor);
   const [newWaypointType, setNewWaypointType] = useState<WaypointType>("start");
   const [pointWaypointType, setPointWaypointType] = useState<WaypointType>("warning");
@@ -595,6 +614,7 @@ export default function EditorPage() {
       <aside className="overflow-y-auto border-r border-line bg-panel p-6">
         <p className="text-xs font-bold uppercase text-moss">Adventure Trail</p>
         <h1 className="mt-2 text-4xl font-semibold leading-none">Studio</h1>
+        <p className="mt-2 text-xs font-semibold text-muted">by Design Arete</p>
 
         <section className="mt-8 border-t border-line pt-5">
           <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase text-muted">
@@ -975,7 +995,45 @@ export default function EditorPage() {
               if (selected?.type === "segment") deleteSegment(selected.segmentId);
             }}
           />
+          <div className="my-1 h-px bg-white/20" />
+          <ToolButton
+            active={showToolbarHelp}
+            icon="help"
+            label="도움말"
+            onClick={() => setShowToolbarHelp((value) => !value)}
+          />
         </div>
+        {showToolbarHelp ? (
+          <div className="absolute bottom-5 right-24 z-10 w-[340px] rounded-md border border-white/15 bg-ink/95 p-4 text-paper shadow-[0_18px_45px_rgba(0,0,0,0.34)]">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-[#d8d0c2]">Toolbar Guide</p>
+                <h2 className="mt-1 text-lg font-bold">편집 도구 설명</h2>
+              </div>
+              <button
+                aria-label="도움말 닫기"
+                className="flex h-8 w-8 items-center justify-center rounded-md bg-white/10 text-paper hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-[#d6a23a]"
+                onClick={() => setShowToolbarHelp(false)}
+                type="button"
+              >
+                <Icon name="x" />
+              </button>
+            </div>
+            <div className="grid max-h-[min(68vh,620px)] gap-2 overflow-y-auto pr-1">
+              {toolbarHelpSections.map((item) => (
+                <div key={item.title} className="grid grid-cols-[36px_1fr] gap-3 rounded-md bg-white/8 p-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[#38342d] text-[#f4f1ea]">
+                    <Icon name={item.icon} className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <strong className="block text-sm">{item.title}</strong>
+                    <span className="mt-1 block text-xs leading-5 text-[#d8d0c2]">{item.description}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {activeTool === "waypoint" ? (
           <div className="absolute right-24 top-5 z-10 grid w-[188px] gap-2 rounded-md bg-panel/95 p-3 shadow">
             <label className="grid gap-2 text-xs font-bold uppercase text-muted" htmlFor="floating-waypoint-type">
@@ -1859,6 +1917,13 @@ function Icon({ className = "h-4 w-4", name }: { className?: string; name: IconN
       {name === "link" ? (
         <path d="M9 7H7a5 5 0 0 0 0 10h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8" />
       ) : null}
+      {name === "help" ? (
+        <>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9.8 9a2.4 2.4 0 0 1 4.5 1.2c0 1.8-2.3 2.1-2.3 4M12 18h.01" />
+        </>
+      ) : null}
+      {name === "x" ? <path d="M6 6l12 12M18 6 6 18" /> : null}
       {name === "chevronLeft" ? <path d="m15 18-6-6 6-6" /> : null}
       {name === "chevronRight" ? <path d="m9 18 6-6-6-6" /> : null}
     </svg>
