@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Adventure Trail Studio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "studio.adventuretrail.desktop",
   "build": {
     "frontendDist": "../out",
@@ -29,6 +29,10 @@
     "externalBin": [
       "binaries/tourmap-api"
     ],
+    "macOS": {
+      "signingIdentity": "-",
+      "hardenedRuntime": false
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

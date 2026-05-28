@@ -1,6 +1,6 @@
 [package]
 name = "adventure-trail-studio"
-version = "0.1.0"
+version = "0.1.1"
 description = "Desktop GPX route editing studio for motorcycle touring"
 authors = ["Adventure Trail Studio"]
 license = ""
