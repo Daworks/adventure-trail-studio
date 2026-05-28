@@ -4,6 +4,14 @@
 
 Desktop-first GPX route editor MVP based on `PRD.md`.
 
+## License
+
+Adventure Trail Studio is distributed under a **source-available license for non-commercial use only**.
+
+- Personal, educational, research, and non-profit use and modification are allowed.
+- Commercial use, paid service operation, sale, or redistribution for commercial purposes requires separate permission.
+- Contact Design Arete for a separate commercial license.
+
 ## Stack
 
 - Frontend: Next.js App Router, React, TypeScript, Tailwind CSS, Zustand

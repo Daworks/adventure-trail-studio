@@ -615,6 +615,9 @@ export default function EditorPage() {
         <p className="text-xs font-bold uppercase text-moss">Adventure Trail</p>
         <h1 className="mt-2 text-4xl font-semibold leading-none">Studio</h1>
         <p className="mt-2 text-xs font-semibold text-muted">by Design Arete</p>
+        <p className="mt-1 text-[11px] font-semibold text-muted">
+          비상업적 사용 전용 소스 공개 라이선스
+        </p>
 
         <section className="mt-8 border-t border-line pt-5">
           <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase text-muted">
