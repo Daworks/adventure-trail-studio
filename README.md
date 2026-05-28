@@ -65,6 +65,53 @@ DATABASE_URL=sqlite://tourmap.db
 TOURMAP_API_BASE_URL=http://127.0.0.1:4000
 ```
 
+## 선행 설치
+
+로컬에서 앱을 실행하려면 다음 프로그램이 필요합니다.
+
+- Git: 원격 저장소를 내려받고 버전을 관리합니다.
+- Node.js 22 LTS 이상과 npm: Next.js 프론트엔드를 실행합니다.
+- Rust toolchain: Axum 백엔드 API를 빌드하고 실행합니다.
+- 최신 데스크톱 브라우저: Chrome, Edge, Safari, Firefox 중 하나를 사용합니다.
+- 카카오 JavaScript 키: 실제 카카오 지도 타일과 주소 검색을 사용하려면 필요합니다.
+
+macOS에서 Homebrew를 사용한다면 다음 명령으로 Git, Node.js, Rust 설치 도구를 설치할 수 있습니다.
+
+```sh
+brew install git node rustup-init
+rustup-init
+```
+
+Windows에서는 winget과 rustup을 사용할 수 있습니다.
+
+```powershell
+winget install --id Git.Git
+winget install --id OpenJS.NodeJS.LTS
+winget install --id Rustlang.Rustup
+```
+
+Linux Ubuntu/Debian 계열에서는 apt, NodeSource, rustup을 사용할 수 있습니다.
+
+```sh
+sudo apt update
+sudo apt install -y git curl build-essential ca-certificates
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+설치 후 새 터미널을 열고 다음 명령으로 설치 상태를 확인합니다.
+
+```sh
+git --version
+node --version
+npm --version
+rustc --version
+cargo --version
+```
+
+SQLite는 백엔드가 `sqlx`의 SQLite 드라이버로 사용하므로 일반적인 로컬 실행에서는 별도 프로그램 설치가 필요하지 않습니다. 다만 데이터베이스 파일을 직접 열어보고 싶다면 `sqlite3` CLI를 추가로 설치해도 됩니다.
+
 ## 로컬 실행
 
 프론트엔드 의존성을 설치합니다.
