@@ -1,4 +1,4 @@
-# TourMap Editor
+# Adventure Trail Studio
 
 [한국어](./README.ko.md) | English
 
