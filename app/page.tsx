@@ -610,14 +610,10 @@ export default function EditorPage() {
   }
 
   return (
-    <main className="grid h-screen min-h-[720px] grid-cols-[320px_minmax(560px,1fr)_340px] bg-paper text-ink">
-      <aside className="overflow-y-auto border-r border-line bg-panel p-6">
+    <main className="grid h-screen min-h-[720px] grid-cols-[320px_minmax(560px,1fr)_340px] grid-rows-[minmax(0,1fr)_auto] bg-paper text-ink">
+      <aside className="min-h-0 overflow-y-auto border-r border-line bg-panel p-6">
         <p className="text-xs font-bold uppercase text-moss">Adventure Trail</p>
         <h1 className="mt-2 text-4xl font-semibold leading-none">Studio</h1>
-        <p className="mt-2 text-xs font-semibold text-muted">by Design Arete</p>
-        <p className="mt-1 text-[11px] font-semibold text-muted">
-          비상업적 사용 전용 소스 공개 라이선스
-        </p>
 
         <section className="mt-8 border-t border-line pt-5">
           <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase text-muted">
@@ -901,7 +897,7 @@ export default function EditorPage() {
         </section>
       </aside>
 
-      <section className="relative overflow-hidden">
+      <section className="relative min-h-0 overflow-hidden">
         <div
           ref={mapRef}
           className={`relative h-full w-full overflow-hidden ${mapCursorClass(activeTool)}`}
@@ -1124,7 +1120,7 @@ export default function EditorPage() {
         ) : null}
       </section>
 
-      <aside className="overflow-y-auto border-l border-line bg-panel p-6">
+      <aside className="min-h-0 overflow-y-auto border-l border-line bg-panel p-6">
         <section className="border-t border-line pt-5">
           <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase text-muted">
             <span>속성</span>
@@ -1494,6 +1490,18 @@ export default function EditorPage() {
         </section>
 
       </aside>
+      <footer className="col-span-3 flex min-h-12 items-center justify-between border-t border-line bg-ink px-6 py-3 text-xs font-semibold text-paper">
+        <span>by Design Arete</span>
+        <span className="text-center text-[#d8d0c2]">비상업적 사용 전용 소스 공개 라이선스</span>
+        <a
+          className="text-[#f3d27a] underline-offset-4 hover:underline"
+          href="https://github.com/Daworks/adventure-trail-studio"
+          rel="noreferrer"
+          target="_blank"
+        >
+          GitHub 저장소
+        </a>
+      </footer>
     </main>
   );
 }
