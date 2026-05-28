@@ -30,8 +30,7 @@ async function disableApiRoutes() {
 
 function runNextBuild() {
   return new Promise((resolve, reject) => {
-    const nextBin = process.platform === "win32" ? "next.cmd" : "next";
-    const child = spawn(nextBin, ["build"], {
+    const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "build"], {
       env: {
         ...process.env,
         DESKTOP_EXPORT: "1",
