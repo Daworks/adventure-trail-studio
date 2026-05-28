@@ -30,6 +30,9 @@ import type {
   WaypointType,
 } from "../domain/types";
 
+const apiBaseUrl = process.env.NEXT_PUBLIC_TOURMAP_API_BASE_URL ?? "";
+const apiPath = (path: string) => `${apiBaseUrl}${path}`;
+
 type Snapshot = Project;
 
 type EditorState = {
@@ -239,7 +242,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   exportGpxText: (type) => exportGpx(get().project, type),
 
   saveProject: async () => {
-    const response = await fetch("/api/projects", {
+    const response = await fetch(apiPath("/api/projects"), {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(get().project),
@@ -249,14 +252,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   loadProjects: async () => {
-    const response = await fetch("/api/projects");
+    const response = await fetch(apiPath("/api/projects"));
     if (!response.ok) return;
     const projects = (await response.json()) as Project[];
     set({ projects });
   },
 
   openProject: async (projectId) => {
-    const response = await fetch(`/api/projects/${projectId}`);
+    const response = await fetch(apiPath(`/api/projects/${projectId}`));
     if (!response.ok) throw new Error(await responseErrorMessage(response, "프로젝트를 열지 못했습니다."));
     const project = ensureEditableProject((await response.json()) as Project);
     set({
@@ -268,7 +271,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   deleteProject: async (projectId) => {
-    const response = await fetch(`/api/projects/${projectId}`, { method: "DELETE" });
+    const response = await fetch(apiPath(`/api/projects/${projectId}`), { method: "DELETE" });
     if (!response.ok) throw new Error(await responseErrorMessage(response, "프로젝트를 삭제하지 못했습니다."));
     if (get().project.id === projectId) {
       get().newProject();

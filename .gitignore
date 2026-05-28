@@ -2,8 +2,12 @@
 .env*.local
 node_modules/
 .next/
+out/
+.desktop-build-disabled/
 .test-dist/
 target/
+src-tauri/target/
+src-tauri/binaries/
 tourmap.db
 backend/tourmap.db
 tsconfig.tsbuildinfo

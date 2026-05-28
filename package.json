@@ -5,12 +5,15 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:desktop": "node scripts/build-desktop.mjs",
     "check:browser": "node scripts/browser-smoke.mjs",
     "check:kakao": "node scripts/check-kakao-sdk.mjs",
     "check:kakao:origin": "node scripts/check-kakao-sdk.mjs --origin",
     "start": "next start",
     "test:frontend": "tsc -p tsconfig.test.json && node --test .test-dist/tests/*.test.js",
     "lint": "next lint",
+    "prepare:tauri-sidecar": "node scripts/prepare-tauri-sidecar.mjs",
+    "tauri": "tauri",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
@@ -21,6 +24,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
     "@types/node": "^22.15.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
