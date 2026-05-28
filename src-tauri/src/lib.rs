@@ -13,7 +13,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_localhost::Builder::new(1420)
-                .host("127.0.0.1")
+                .host("localhost")
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())
