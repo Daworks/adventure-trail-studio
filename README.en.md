@@ -32,7 +32,31 @@ TOURMAP_API_BASE_URL=http://127.0.0.1:4000
 
 ## Run Locally
 
-Install frontend dependencies once:
+On macOS or Linux, start both the Rust API and Next.js dev server with:
+
+```sh
+./run.sh
+```
+
+On Windows PowerShell, use:
+
+```powershell
+.\run.ps1
+```
+
+Both scripts install `node_modules` when missing, start the API and web servers, then open the default browser when `http://localhost:3000` responds.
+
+To override ports or API address:
+
+```sh
+PORT=3001 TOURMAP_API_ADDR=127.0.0.1:4100 ./run.sh
+```
+
+```powershell
+$env:PORT="3001"; $env:TOURMAP_API_ADDR="127.0.0.1:4100"; .\run.ps1
+```
+
+Manual startup is also available. Install frontend dependencies once:
 
 ```sh
 npm install
@@ -54,6 +78,127 @@ TOURMAP_API_BASE_URL=http://127.0.0.1:4000 npm run dev -- --port 3000
 Open `http://localhost:3000`.
 
 The frontend proxies `/api/*` through the App Router API proxy to `TOURMAP_API_BASE_URL` at runtime. If that variable is omitted, it defaults to `http://127.0.0.1:4000`. For production, pass the same variable to `npm run start`.
+
+## Production Deployment
+
+The recommended production setup is to run Adventure Trail Studio on a separate subdomain, for example `https://ats.civa.kr`, and add only a menu link from the existing Laravel site at `https://civa.kr`.
+
+Current deployment conventions:
+
+- App root: `/var/www/civa.kr/ats.civa.kr`
+- Current release symlink: `/var/www/civa.kr/ats.civa.kr/current`
+- Shared data: `/var/www/civa.kr/ats.civa.kr/shared`
+- Next.js app: `127.0.0.1:3100`
+- Rust API: `127.0.0.1:4100`
+- Web service: `ats-web.service`
+- API service: `ats-api.service`
+
+Build locally and deploy artifacts to the Ubuntu server. Do not build on the production server. On macOS, use Docker to build the Linux x86_64 Rust API binary:
+
+```sh
+npm run build
+
+docker run --rm --platform linux/amd64 \
+  -v "$PWD/backend:/app" \
+  -w /app \
+  rust:1.93-bookworm \
+  cargo build --release
+```
+
+Package the release:
+
+```sh
+tar --exclude='.git' \
+  --exclude='node_modules' \
+  --exclude='backend/target/debug' \
+  --exclude='src-tauri/target' \
+  --exclude='.next/cache' \
+  -czf /private/tmp/adventure-trail-studio-release.tgz \
+  package.json package-lock.json next.config.mjs app src styles.css \
+  tailwind.config.ts postcss.config.mjs tsconfig.json next-env.d.ts \
+  .next backend/target/release/tourmap-api
+```
+
+Upload it:
+
+```sh
+scp /private/tmp/adventure-trail-studio-release.tgz onlinejubo.com:/tmp/adventure-trail-studio-release.tgz
+```
+
+On the server, extract to a timestamped release directory and switch the `current` symlink:
+
+```sh
+APP_ROOT=/var/www/civa.kr/ats.civa.kr
+RELEASE=$(date +%Y%m%d%H%M%S)
+RELEASE_DIR=$APP_ROOT/releases/$RELEASE
+
+sudo install -d -o civa -g civa "$APP_ROOT" "$APP_ROOT/releases" "$APP_ROOT/shared" "$APP_ROOT/shared/data" "$RELEASE_DIR"
+sudo tar -xzf /tmp/adventure-trail-studio-release.tgz -C "$RELEASE_DIR"
+sudo chown -R civa:civa "$RELEASE_DIR" "$APP_ROOT/shared"
+sudo chmod +x "$RELEASE_DIR/backend/target/release/tourmap-api"
+sudo npm --prefix "$RELEASE_DIR" ci --omit=dev
+sudo ln -sfn "$RELEASE_DIR" "$APP_ROOT/current"
+```
+
+Runtime environment file:
+
+```sh
+sudo tee /var/www/civa.kr/ats.civa.kr/shared/ats.env >/dev/null <<'EOF'
+NODE_ENV=production
+PORT=3100
+HOSTNAME=127.0.0.1
+TOURMAP_API_BASE_URL=http://127.0.0.1:4100
+TOURMAP_API_ADDR=127.0.0.1:4100
+DATABASE_URL=sqlite:///var/www/civa.kr/ats.civa.kr/shared/data/tourmap.db
+NEXT_PUBLIC_KAKAO_MAP_API_KEY=Kakao_JavaScript_key
+EOF
+sudo chown civa:civa /var/www/civa.kr/ats.civa.kr/shared/ats.env
+sudo chmod 600 /var/www/civa.kr/ats.civa.kr/shared/ats.env
+```
+
+Create `ats-api.service` and `ats-web.service` with `User=civa`, then expose only Nginx publicly. The app processes should bind to `127.0.0.1`.
+
+```nginx
+server {
+    listen 80;
+    server_name ats.civa.kr;
+
+    client_max_body_size 20M;
+
+    location / {
+        proxy_pass http://127.0.0.1:3100;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+Apply and verify:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable ats-api.service ats-web.service
+sudo systemctl restart ats-api.service ats-web.service
+sudo nginx -t
+sudo systemctl reload nginx
+sudo certbot --nginx -d ats.civa.kr --redirect
+
+systemctl is-active ats-api.service ats-web.service nginx
+curl http://127.0.0.1:4100/health
+curl https://ats.civa.kr/api/projects
+```
+
+Add the production origin to the Kakao Developers JavaScript SDK domain list:
+
+```txt
+https://ats.civa.kr
+```
 
 ## Verify
 

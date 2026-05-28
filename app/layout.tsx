@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TourMap Editor",
+  title: "Adventure trail studio",
   description: "GPX route editing studio for motorcycle touring.",
 };
 

@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 API_ADDR="${TOURMAP_API_ADDR:-127.0.0.1:4000}"
 API_BASE_URL="${TOURMAP_API_BASE_URL:-http://${API_ADDR}}"
 WEB_PORT="${PORT:-3000}"
+WEB_URL="http://localhost:${WEB_PORT}"
 
 cd "$ROOT_DIR"
 
@@ -40,9 +41,24 @@ echo "Rust API 서버를 시작합니다: ${API_ADDR}"
 ) &
 API_PID=$!
 
-echo "Next.js 개발 서버를 시작합니다: http://localhost:${WEB_PORT}"
+echo "Next.js 개발 서버를 시작합니다: ${WEB_URL}"
 TOURMAP_API_BASE_URL="$API_BASE_URL" npm run dev -- --port "$WEB_PORT" &
 WEB_PID=$!
+
+(
+  for _ in {1..60}; do
+    if curl -fsS "$WEB_URL" >/dev/null 2>&1; then
+      if command -v open >/dev/null 2>&1; then
+        open "$WEB_URL" >/dev/null 2>&1 || true
+      elif command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$WEB_URL" >/dev/null 2>&1 || true
+      fi
+      exit 0
+    fi
+    sleep 1
+  done
+  echo "브라우저 자동 실행을 건너뜁니다. 서버 응답 확인 시간이 초과되었습니다."
+) &
 
 cat <<MSG
 
