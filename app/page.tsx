@@ -612,8 +612,18 @@ export default function EditorPage() {
   return (
     <main className="grid h-screen min-h-[720px] grid-cols-[320px_minmax(560px,1fr)_340px] grid-rows-[minmax(0,1fr)_auto] bg-paper text-ink">
       <aside className="min-h-0 overflow-y-auto border-r border-line bg-panel p-6">
-        <p className="text-xs font-bold uppercase text-moss">Adventure Trail</p>
-        <h1 className="mt-2 text-4xl font-semibold leading-none">Studio</h1>
+        <div className="flex items-center gap-3">
+          <img
+            src="/icons/app-icon-192.png"
+            alt=""
+            aria-hidden="true"
+            className="h-14 w-14 shrink-0 rounded-lg shadow-sm"
+          />
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase text-moss">Adventure Trail</p>
+            <h1 className="mt-2 text-4xl font-semibold leading-none">Studio</h1>
+          </div>
+        </div>
 
         <section className="mt-8 border-t border-line pt-5">
           <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase text-muted">
