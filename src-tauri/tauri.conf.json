@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Adventure Trail Studio",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "identifier": "studio.adventuretrail.desktop",
   "build": {
     "frontendDist": "../out",

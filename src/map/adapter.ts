@@ -1,10 +1,12 @@
 import { lineString, simplify } from "@turf/turf";
 import type { MapMode, Project, RoutePoint, RouteSegment, Waypoint, WaypointType } from "../domain/types";
-import type { MapAdapter, MapRuntimeStatus, ProjectRenderCallbacks, ProjectRenderInfo } from "./types";
+import type { MapAdapter, MapProvider, MapRuntimeStatus, ProjectRenderCallbacks, ProjectRenderInfo } from "./types";
 
 const MAX_VISIBLE_POINT_HANDLES = 360;
 const SIMPLIFY_POINT_THRESHOLD = 1600;
 const HANDLE_SIMPLIFY_TOLERANCE = 0.00018;
+const KAKAO_API_KEY_STORAGE_KEY = "adventureTrailStudio.kakaoApiKey";
+const OSM_TILE_SIZE = 256;
 
 type KakaoNamespace = {
   maps: {
@@ -127,6 +129,7 @@ type FallbackPointerState = FallbackPointerTarget & {
 declare global {
   interface Window {
     __tourMapKakaoPromise?: Promise<KakaoNamespace>;
+    __tourMapKakaoPromiseKey?: string;
     kakao?: KakaoNamespace;
   }
 }
@@ -149,54 +152,91 @@ class KakaoMapAdapter implements MapAdapter {
   private pendingProject?: Project;
   private pointActionOverlay?: { overlay?: KakaoOverlay; element?: HTMLElement; signature: string };
   private polylines = new Map<string, PolylineEntry>();
+  private provider: MapProvider = "kakao";
   private zoom = 11;
 
   mount(container: HTMLElement): void {
     this.container = container;
-    this.notifyMapStatus({ state: "loading", message: "카카오맵 SDK 로딩 중" });
+    this.notifyMapStatus({ state: "loading", provider: this.provider, message: "카카오맵 SDK 로딩 중" });
     this.renderFallback("카카오맵 SDK 로딩 중");
-    loadKakaoSdk()
-      .then((kakao) => {
-        this.kakao = kakao;
-        this.unbindFallbackInteractions();
-        container.innerHTML = "";
-        this.map = new kakao.maps.Map(container, {
-          center: new kakao.maps.LatLng(this.center.lat, this.center.lng),
-          level: zoomToKakaoLevel(this.zoom),
-        });
-        kakao.maps.event.addListener(this.map, "dragend", () => {
-          if (!this.map) return;
-          this.center = { id: "kakao-center", ...pointFromLatLng(this.map.getCenter()) };
-          this.updatePanDataset();
-        });
-        kakao.maps.event.addListener(this.map, "click", (event) => {
-          if (!event.latLng) return;
-          this.pendingCallbacks.onMapClick?.(pointFromLatLng(event.latLng));
-        });
-        kakao.maps.event.addListener(this.map, "rightclick", (event: KakaoMouseEvent) => {
-          event.domEvent?.preventDefault?.();
-          if (!event.latLng || !this.pendingProject) return;
-          const point = pointFromLatLng(event.latLng);
-          const segmentId = nearestContextSegmentId(this.pendingProject, point);
-          if (!segmentId) return;
-          this.pendingCallbacks.onSegmentContextMenu?.(segmentId, point, this.screenPointFromKakaoEvent(event));
-        });
-        this.applyMode();
-        this.notifyMapStatus({ state: "ready", message: "카카오맵 연결됨" });
-        this.renderPendingProject();
-      })
-      .catch((error) => {
-        const message = mapLoadErrorMessage(error);
-        this.notifyMapStatus({ state: "error", message });
-        this.renderFallback(message);
+    void this.initializeKakaoMap(false);
+  }
+
+  async updateKakaoApiKey(key: string): Promise<void> {
+    const normalizedKey = key.trim();
+    if (!normalizedKey) {
+      throw new Error("카카오 JavaScript 키를 입력하세요.");
+    }
+    localStorage.setItem(KAKAO_API_KEY_STORAGE_KEY, normalizedKey);
+    resetKakaoSdkLoader();
+    this.provider = "kakao";
+    this.notifyMapStatus({ state: "loading", provider: this.provider, message: "카카오맵 SDK 재연결 중" });
+    this.renderFallback("카카오맵 SDK 재연결 중");
+    await this.initializeKakaoMap(true);
+  }
+
+  private async initializeKakaoMap(throwOnFailure: boolean): Promise<void> {
+    const container = this.container;
+    if (!container) return;
+    try {
+      const kakao = await loadKakaoSdk();
+      this.kakao = kakao;
+      this.unbindFallbackInteractions();
+      container.innerHTML = "";
+      this.map = new kakao.maps.Map(container, {
+        center: new kakao.maps.LatLng(this.center.lat, this.center.lng),
+        level: zoomToKakaoLevel(this.zoom),
       });
+      kakao.maps.event.addListener(this.map, "dragend", () => {
+        if (!this.map) return;
+        this.center = { id: "kakao-center", ...pointFromLatLng(this.map.getCenter()) };
+        this.updatePanDataset();
+      });
+      kakao.maps.event.addListener(this.map, "click", (event) => {
+        if (!event.latLng) return;
+        this.pendingCallbacks.onMapClick?.(pointFromLatLng(event.latLng));
+      });
+      kakao.maps.event.addListener(this.map, "rightclick", (event: KakaoMouseEvent) => {
+        event.domEvent?.preventDefault?.();
+        if (!event.latLng || !this.pendingProject) return;
+        const point = pointFromLatLng(event.latLng);
+        const segmentId = nearestContextSegmentId(this.pendingProject, point);
+        if (!segmentId) return;
+        this.pendingCallbacks.onSegmentContextMenu?.(segmentId, point, this.screenPointFromKakaoEvent(event));
+      });
+      this.applyMode();
+      this.notifyMapStatus({ state: "ready", provider: this.provider, message: "카카오맵 연결됨" });
+      this.renderPendingProject();
+    } catch (error) {
+      const message = mapLoadErrorMessage(error);
+      this.map = undefined;
+      this.kakao = undefined;
+      this.notifyMapStatus({ state: "fallback", provider: "osm", message, needsApiKey: true });
+      this.renderFallback(message);
+      if (throwOnFailure) throw new Error(message);
+    }
   }
 
   setMode(mode: MapMode): void {
     this.mode = mode;
     if (this.container) this.container.dataset.mode = mode;
     this.applyMode();
-    if (!this.map) this.renderFallback(mode === "satellite" ? "위성 지도" : "일반 지도");
+    if (!this.map) this.renderFallback(this.fallbackMessage);
+  }
+
+  setProvider(provider: MapProvider): void {
+    this.provider = provider;
+    if (provider === "osm") {
+      this.clearProjectObjects();
+      this.map = undefined;
+      this.kakao = undefined;
+      this.notifyMapStatus({ state: "fallback", provider, message: "OpenStreetMap을 사용 중입니다." });
+      this.renderFallback("OpenStreetMap을 사용 중입니다.");
+      return;
+    }
+    this.notifyMapStatus({ state: "loading", provider, message: "카카오맵 SDK 연결 중" });
+    this.renderFallback("카카오맵 SDK 연결 중");
+    void this.initializeKakaoMap(false);
   }
 
   setView(center: RoutePoint, zoom: number): void {
@@ -219,6 +259,9 @@ class KakaoMapAdapter implements MapAdapter {
   }
 
   async searchAddress(query: string): Promise<RoutePoint> {
+    if (this.provider === "osm") {
+      throw new Error("주소 검색은 카카오맵 모드에서 사용할 수 있습니다.");
+    }
     let kakao: KakaoNamespace;
     try {
       kakao = this.kakao ?? (await loadKakaoSdk());
@@ -293,7 +336,7 @@ class KakaoMapAdapter implements MapAdapter {
 
   private renderPendingProject(): void {
     if (!this.pendingProject) return;
-    if (!this.map || !this.kakao) {
+    if (!this.map || !this.kakao || this.provider === "osm") {
       this.renderFallback(this.fallbackMessage);
       return;
     }
@@ -474,26 +517,25 @@ class KakaoMapAdapter implements MapAdapter {
   private renderFallback(message: string): void {
     if (!this.container) return;
     this.fallbackMessage = message;
-    const fallback = fallbackProjectSvg(this.pendingProject, this.center, this.pendingCallbacks);
+    const viewport = fallbackViewport(this.container, this.center, this.zoom, this.fallbackPan);
+    const tiles = osmTiles(viewport, this.mode);
+    const fallback = fallbackProjectSvg(this.pendingProject, this.pendingCallbacks, viewport);
     if (this.pendingProject) {
       this.pendingCallbacks.onRenderInfo?.(computeProjectRenderInfo(this.pendingProject, this.pendingCallbacks));
     }
     this.container.dataset.mode = this.mode;
-    this.container.style.background =
-      this.mode === "satellite"
-        ? "linear-gradient(135deg, #252a24 0%, #566151 48%, #1d241f 100%)"
-        : "linear-gradient(135deg, #ded8ca 0%, #c7d2c0 52%, #e9e1d2 100%)";
+    this.container.style.background = "#d7d2c8";
     this.container.style.cursor = "grab";
     this.updatePanDataset();
     this.container.innerHTML = `
-      <div data-fallback-grid class="absolute inset-0 opacity-30" style="background-image: linear-gradient(rgba(35,33,29,.2) 1px, transparent 1px), linear-gradient(90deg, rgba(35,33,29,.2) 1px, transparent 1px); background-size: 72px 72px; background-position: ${this.fallbackPan.x}px ${this.fallbackPan.y}px;"></div>
-      <svg class="absolute inset-0 h-full w-full" viewBox="0 0 1000 1000" preserveAspectRatio="none">
-        <g data-fallback-layer transform="translate(${this.fallbackPan.x} ${this.fallbackPan.y})">
-          ${fallback}
-        </g>
+      <div data-osm-tile-layer class="absolute inset-0 overflow-hidden bg-[#d7d2c8]">
+        ${tiles}
+      </div>
+      <svg class="absolute inset-0 h-full w-full" width="${viewport.width}" height="${viewport.height}" viewBox="0 0 ${viewport.width} ${viewport.height}" preserveAspectRatio="none">
+        <g data-fallback-layer>${fallback}</g>
       </svg>
-      <div class="absolute left-5 top-5 rounded-md bg-panel/90 px-3 py-2 text-xs text-muted shadow-sm">${escapeHtml(message)}</div>
-      <div class="absolute bottom-5 left-5 rounded-md bg-panel/90 px-3 py-2 text-xs text-muted shadow-sm">로컬 편집 모드: 드래그로 이동, 클릭으로 포인트를 추가할 수 있습니다.</div>
+      <div class="absolute left-5 top-5 max-w-md rounded-md bg-panel/95 px-3 py-2 text-xs text-muted shadow-sm">${escapeHtml(message)} OpenStreetMap fallback으로 전환했습니다.</div>
+      <div class="absolute bottom-5 left-5 rounded-md bg-panel/95 px-3 py-2 text-xs text-muted shadow-sm">© OpenStreetMap contributors</div>
 	    `;
 	    this.bindFallbackInteractions();
 	  }
@@ -524,10 +566,7 @@ class KakaoMapAdapter implements MapAdapter {
       if (pointer.kind === "point" || pointer.kind === "waypoint") return;
       this.fallbackPan = { x: pointer.originX + dx, y: pointer.originY + dy };
       this.updatePanDataset();
-      const grid = this.container.querySelector<HTMLElement>("[data-fallback-grid]");
-      const layer = this.container.querySelector<SVGGElement>("[data-fallback-layer]");
-      if (grid) grid.style.backgroundPosition = `${this.fallbackPan.x}px ${this.fallbackPan.y}px`;
-      if (layer) layer.setAttribute("transform", `translate(${this.fallbackPan.x} ${this.fallbackPan.y})`);
+      this.renderFallback(this.fallbackMessage);
     };
     const end = (id: number, event: MouseEvent | PointerEvent): void => {
       const pointer = this.fallbackPointer;
@@ -617,13 +656,10 @@ class KakaoMapAdapter implements MapAdapter {
 
   private fallbackPointFromPointer(event: MouseEvent): Omit<RoutePoint, "id"> {
     const rect = this.container!.getBoundingClientRect();
-    const scale = fallbackScale(this.zoom);
-    const x = event.clientX - rect.left - rect.width / 2 - this.fallbackPan.x;
-    const y = event.clientY - rect.top - rect.height / 2 - this.fallbackPan.y;
-    return {
-      lat: this.center.lat - y / scale,
-      lng: this.center.lng + x / scale,
-    };
+    const viewport = fallbackViewport(this.container!, this.center, this.zoom, this.fallbackPan);
+    const x = viewport.topLeft.x + event.clientX - rect.left;
+    const y = viewport.topLeft.y + event.clientY - rect.top;
+    return worldToLatLng(x, y, viewport.zoom);
   }
 
   private screenPointFromKakaoEvent(event: KakaoMouseEvent): { x: number; y: number } {
@@ -666,7 +702,59 @@ function averagePoint(points: Array<Omit<RoutePoint, "id">>): Omit<RoutePoint, "
   };
 }
 
-function fallbackProjectSvg(project: Project | undefined, center: RoutePoint, callbacks: ProjectRenderCallbacks): string {
+type FallbackViewport = {
+  height: number;
+  topLeft: { x: number; y: number };
+  width: number;
+  zoom: number;
+};
+
+function fallbackViewport(
+  container: HTMLElement,
+  center: Omit<RoutePoint, "id">,
+  zoom: number,
+  pan: { x: number; y: number },
+): FallbackViewport {
+  const rect = container.getBoundingClientRect();
+  const width = Math.max(1, Math.round(rect.width || container.clientWidth || 1000));
+  const height = Math.max(1, Math.round(rect.height || container.clientHeight || 1000));
+  const tileZoom = Math.max(1, Math.min(19, Math.round(zoom)));
+  const centerWorld = latLngToWorld(center.lat, center.lng, tileZoom);
+  return {
+    height,
+    topLeft: {
+      x: centerWorld.x - width / 2 - pan.x,
+      y: centerWorld.y - height / 2 - pan.y,
+    },
+    width,
+    zoom: tileZoom,
+  };
+}
+
+function osmTiles(viewport: FallbackViewport, mode: MapMode): string {
+  const minTileX = Math.floor(viewport.topLeft.x / OSM_TILE_SIZE);
+  const maxTileX = Math.floor((viewport.topLeft.x + viewport.width) / OSM_TILE_SIZE);
+  const minTileY = Math.floor(viewport.topLeft.y / OSM_TILE_SIZE);
+  const maxTileY = Math.floor((viewport.topLeft.y + viewport.height) / OSM_TILE_SIZE);
+  const scale = 2 ** viewport.zoom;
+  const maxTile = scale - 1;
+  const opacity = mode === "satellite" ? "opacity:.72; filter:saturate(.72) contrast(.96);" : "";
+  const tiles: string[] = [];
+  for (let tileY = minTileY; tileY <= maxTileY; tileY += 1) {
+    if (tileY < 0 || tileY > maxTile) continue;
+    for (let tileX = minTileX; tileX <= maxTileX; tileX += 1) {
+      const wrappedX = ((tileX % scale) + scale) % scale;
+      const left = tileX * OSM_TILE_SIZE - viewport.topLeft.x;
+      const top = tileY * OSM_TILE_SIZE - viewport.topLeft.y;
+      tiles.push(
+        `<img alt="" draggable="false" src="https://tile.openstreetmap.org/${viewport.zoom}/${wrappedX}/${tileY}.png" style="position:absolute; left:${left.toFixed(1)}px; top:${top.toFixed(1)}px; width:${OSM_TILE_SIZE}px; height:${OSM_TILE_SIZE}px; user-select:none; ${opacity}" />`,
+      );
+    }
+  }
+  return tiles.join("");
+}
+
+function fallbackProjectSvg(project: Project | undefined, callbacks: ProjectRenderCallbacks, viewport: FallbackViewport): string {
   if (!project) return "";
   const showRoutes = callbacks.showRoutes ?? true;
   const showWaypoints = callbacks.showWaypoints ?? true;
@@ -677,7 +765,7 @@ function fallbackProjectSvg(project: Project | undefined, center: RoutePoint, ca
     .map((segment) => {
       const path = visibleRoutePoints(segment.points)
         .map((point, index) => {
-          const projected = fallbackProjectPoint(point, center);
+          const projected = fallbackProjectPoint(point, viewport);
           return `${index ? "L" : "M"} ${projected.x.toFixed(1)} ${projected.y.toFixed(1)}`;
         })
         .join(" ");
@@ -689,14 +777,14 @@ function fallbackProjectSvg(project: Project | undefined, center: RoutePoint, ca
     .filter((segment) => showRoutes && showPointHandles && segment.id === callbacks.selectedSegmentId)
     .flatMap((segment) => visibleHandlePoints(segment).map((point) => ({ point, segmentId: segment.id })))
     .map(({ point, segmentId }) => {
-      const projected = fallbackProjectPoint(point, center);
+      const projected = fallbackProjectPoint(point, viewport);
       return `<circle data-fallback-segment-id="${escapeHtml(segmentId)}" data-fallback-point-id="${escapeHtml(point.id)}" cx="${projected.x.toFixed(1)}" cy="${projected.y.toFixed(1)}" r="7" fill="#d93a2f" stroke="#fff8ed" stroke-width="2.5" vector-effect="non-scaling-stroke" style="cursor: move;" />`;
     })
     .join("");
   const endpoints = showRoutes
     ? (callbacks.showConnectionEndpoints ? segmentEndpointMarkers(project) : routeEndpointMarkers(project))
         .map((endpoint) => {
-          const projected = fallbackProjectPoint(endpoint.point, center);
+          const projected = fallbackProjectPoint(endpoint.point, viewport);
           const label = endpoint.kind === "start" ? "S" : "F";
           const fill = endpoint.kind === "start" ? "#1f6b53" : "#23211d";
           const active = isConnectionStart(endpoint, callbacks.connectionStart);
@@ -711,18 +799,18 @@ function fallbackProjectSvg(project: Project | undefined, center: RoutePoint, ca
   const waypoints = project.waypoints
     .filter(() => showWaypoints)
     .map((waypoint) => {
-      const projected = fallbackProjectPoint(waypoint, center);
+      const projected = fallbackProjectPoint(waypoint, viewport);
       return `<circle data-fallback-waypoint-id="${escapeHtml(waypoint.id)}" cx="${projected.x.toFixed(1)}" cy="${projected.y.toFixed(1)}" r="10" fill="#1f6b53" stroke="#23211d" stroke-width="2" vector-effect="non-scaling-stroke" style="cursor: move;"><title>${escapeHtml(waypoint.title)}</title></circle>`;
     })
     .join("");
   return `${routes}${points}${endpoints}${waypoints}`;
 }
 
-function fallbackProjectPoint(point: Omit<RoutePoint, "id">, center: Omit<RoutePoint, "id">): { x: number; y: number } {
-  const scale = fallbackScale(11);
+function fallbackProjectPoint(point: Omit<RoutePoint, "id">, viewport: FallbackViewport): { x: number; y: number } {
+  const world = latLngToWorld(point.lat, point.lng, viewport.zoom);
   return {
-    x: 500 + (point.lng - center.lng) * scale,
-    y: 500 - (point.lat - center.lat) * scale,
+    x: world.x - viewport.topLeft.x,
+    y: world.y - viewport.topLeft.y,
   };
 }
 
@@ -745,8 +833,21 @@ function fallbackPointerTarget(target: EventTarget | null): FallbackPointerTarge
   return { kind: "pan" };
 }
 
-function fallbackScale(zoom: number): number {
-  return 70000 * 2 ** Math.max(-3, Math.min(3, zoom - 11));
+function latLngToWorld(lat: number, lng: number, zoom: number): { x: number; y: number } {
+  const sinLat = Math.sin((Math.max(-85.05112878, Math.min(85.05112878, lat)) * Math.PI) / 180);
+  const scale = OSM_TILE_SIZE * 2 ** zoom;
+  return {
+    x: ((lng + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
+  };
+}
+
+function worldToLatLng(x: number, y: number, zoom: number): Omit<RoutePoint, "id"> {
+  const scale = OSM_TILE_SIZE * 2 ** zoom;
+  const lng = (x / scale) * 360 - 180;
+  const n = Math.PI - (2 * Math.PI * y) / scale;
+  const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+  return { lat, lng };
 }
 
 function escapeHtml(value: string): string {
@@ -1076,15 +1177,17 @@ function loadKakaoSdk(): Promise<KakaoNamespace> {
   if (window.kakao?.maps) {
     return new Promise((resolve) => window.kakao!.maps.load(() => resolve(window.kakao!)));
   }
-  if (window.__tourMapKakaoPromise) return window.__tourMapKakaoPromise;
+  const appKey = kakaoApiKey();
+  if (window.__tourMapKakaoPromise && window.__tourMapKakaoPromiseKey === appKey) return window.__tourMapKakaoPromise;
 
-  const appKey = process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY;
   if (!appKey) {
     return Promise.reject(new Error("Missing Kakao API key"));
   }
 
+  window.__tourMapKakaoPromiseKey = appKey;
   window.__tourMapKakaoPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
+    script.dataset.tourMapKakaoSdk = "true";
     script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(
       appKey,
     )}&autoload=false&libraries=services`;
@@ -1100,6 +1203,20 @@ function loadKakaoSdk(): Promise<KakaoNamespace> {
     document.head.appendChild(script);
   });
   return window.__tourMapKakaoPromise;
+}
+
+function kakaoApiKey(): string {
+  try {
+    return localStorage.getItem(KAKAO_API_KEY_STORAGE_KEY)?.trim() || process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY || "";
+  } catch {
+    return process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY || "";
+  }
+}
+
+function resetKakaoSdkLoader(): void {
+  window.__tourMapKakaoPromise = undefined;
+  window.__tourMapKakaoPromiseKey = undefined;
+  document.querySelectorAll("script[data-tour-map-kakao-sdk='true']").forEach((script) => script.remove());
 }
 
 function mapLoadErrorMessage(error: unknown): string {

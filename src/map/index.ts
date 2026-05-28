@@ -5,4 +5,4 @@ export function createMapAdapter(): MapAdapter {
   return createKakaoMapAdapter();
 }
 
-export type { MapAdapter, MapRuntimeStatus, ProjectRenderCallbacks, ProjectRenderInfo } from "./types";
+export type { MapAdapter, MapProvider, MapRuntimeStatus, ProjectRenderCallbacks, ProjectRenderInfo } from "./types";

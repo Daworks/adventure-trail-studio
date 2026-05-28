@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent, FormEvent } from "react";
 import { createMapAdapter } from "@/src/map";
-import type { MapAdapter, MapRuntimeStatus, ProjectRenderInfo } from "@/src/map";
+import type { MapAdapter, MapProvider, MapRuntimeStatus, ProjectRenderInfo } from "@/src/map";
 import { midpoint } from "@/src/domain/geometry";
 import {
   projectDistance,
@@ -55,6 +55,9 @@ type IconName =
   | "trash"
   | "layers"
   | "filePlus"
+  | "key"
+  | "map"
+  | "mapOpen"
   | "reverse"
   | "link"
   | "chevronLeft"
@@ -71,8 +74,13 @@ export default function EditorPage() {
   const [isDraggingGpxUpload, setIsDraggingGpxUpload] = useState(false);
   const [mapStatus, setMapStatus] = useState<MapRuntimeStatus>({
     state: "loading",
+    provider: "kakao",
     message: "카카오맵 SDK 로딩 중",
   });
+  const [mapProvider, setMapProvider] = useState<MapProvider>("kakao");
+  const [kakaoApiKeyInput, setKakaoApiKeyInput] = useState("");
+  const [kakaoApiKeyMessage, setKakaoApiKeyMessage] = useState("");
+  const [isUpdatingKakaoApiKey, setIsUpdatingKakaoApiKey] = useState(false);
   const [isProjectBusy, setIsProjectBusy] = useState(false);
   const [projectMessage, setProjectMessage] = useState("");
   const [renderInfo, setRenderInfo] = useState<ProjectRenderInfo | null>(null);
@@ -203,6 +211,14 @@ export default function EditorPage() {
     adapterRef.current.setView(center, 11);
     return () => adapterRef.current?.destroy();
   }, []);
+
+  useEffect(() => {
+    setKakaoApiKeyInput(localStorage.getItem("adventureTrailStudio.kakaoApiKey") || "");
+  }, []);
+
+  useEffect(() => {
+    adapterRef.current?.setProvider(mapProvider);
+  }, [mapProvider]);
 
   useEffect(() => {
     adapterRef.current?.setMode(mapMode);
@@ -513,6 +529,26 @@ export default function EditorPage() {
     }
   }
 
+  async function handleKakaoApiKeyUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const key = kakaoApiKeyInput.trim();
+    if (!key) {
+      setKakaoApiKeyMessage("카카오 JavaScript 키를 입력하세요.");
+      return;
+    }
+    setIsUpdatingKakaoApiKey(true);
+    setKakaoApiKeyMessage("키를 확인하는 중...");
+    try {
+      await adapterRef.current?.updateKakaoApiKey(key);
+      setMapProvider("kakao");
+      setKakaoApiKeyMessage("카카오맵 키를 저장하고 적용했습니다.");
+    } catch (error) {
+      setKakaoApiKeyMessage(error instanceof Error ? error.message : "카카오맵 키를 적용하지 못했습니다.");
+    } finally {
+      setIsUpdatingKakaoApiKey(false);
+    }
+  }
+
   function handleMapDragOver(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     if (event.dataTransfer.types.includes("Files")) {
@@ -738,6 +774,39 @@ export default function EditorPage() {
 
         <section className="mt-6 border-t border-line pt-5">
           <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase text-muted">
+            <span>지도 API 키</span>
+            <span>{mapStatus.provider === "kakao" && mapStatus.state === "ready" ? "연결됨" : "확인 필요"}</span>
+          </div>
+          {mapStatus.needsApiKey ? (
+            <p className="mb-3 rounded-md bg-[#f4ded8] px-3 py-2 text-xs text-[#8f3528]">
+              유효한 카카오 JavaScript 키가 필요합니다. 키를 입력하면 이 기기에 저장되고 즉시 다시 연결합니다.
+            </p>
+          ) : null}
+          <form className="grid gap-2 rounded-md bg-[#f3eee4] p-3" onSubmit={handleKakaoApiKeyUpdate}>
+            <label className="grid gap-2 text-xs font-bold uppercase text-muted">
+              Kakao JavaScript Key
+              <input
+                className="h-10 rounded-md border border-line bg-[#f7f2e8] px-3 text-sm normal-case text-ink outline-none"
+                placeholder="카카오 JavaScript 키 입력"
+                spellCheck={false}
+                value={kakaoApiKeyInput}
+                onChange={(event) => setKakaoApiKeyInput(event.target.value)}
+              />
+            </label>
+            <button
+              className="flex h-10 items-center justify-center gap-2 rounded-md bg-moss text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isUpdatingKakaoApiKey}
+              type="submit"
+            >
+              <Icon name="key" />
+              키 저장 및 적용
+            </button>
+            {kakaoApiKeyMessage ? <p className="text-xs text-muted">{kakaoApiKeyMessage}</p> : null}
+          </form>
+        </section>
+
+        <section className="mt-6 border-t border-line pt-5">
+          <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase text-muted">
             <span>GPX</span>
             <span>가져오기 / 내보내기</span>
           </div>
@@ -854,6 +923,19 @@ export default function EditorPage() {
           </button>
         </div>
         <div className="absolute right-5 top-5 z-10 grid gap-2 rounded-md border border-white/20 bg-ink/95 p-2.5 shadow-[0_18px_45px_rgba(0,0,0,0.34)]">
+          <ToolButton
+            active={mapProvider === "kakao"}
+            icon="map"
+            label="카카오맵"
+            onClick={() => setMapProvider("kakao")}
+          />
+          <ToolButton
+            active={mapProvider === "osm"}
+            icon="mapOpen"
+            label="오픈맵"
+            onClick={() => setMapProvider("osm")}
+          />
+          <div className="my-1 h-px bg-white/20" />
           {editorTools.map((tool) => (
             <ToolButton
               key={tool}
@@ -1748,6 +1830,24 @@ function Icon({ className = "h-4 w-4", name }: { className?: string; name: IconN
       ) : null}
       {name === "filePlus" ? (
         <path d="M6 3h8l4 4v14H6V3ZM14 3v5h4M12 12v6M9 15h6" />
+      ) : null}
+      {name === "key" ? (
+        <>
+          <circle cx="8" cy="14" r="4" />
+          <path d="m11 11 8-8M16 6l2 2M14 8l2 2" />
+        </>
+      ) : null}
+      {name === "map" ? (
+        <>
+          <path d="M4 6.5 9 4l6 2.5 5-2.5v13.5L15 20l-6-2.5L4 20V6.5Z" />
+          <path d="M9 4v13.5M15 6.5V20" />
+        </>
+      ) : null}
+      {name === "mapOpen" ? (
+        <>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M4 12h16M12 4c2 2.4 3 5 3 8s-1 5.6-3 8M12 4c-2 2.4-3 5-3 8s1 5.6 3 8" />
+        </>
       ) : null}
       {name === "reverse" ? (
         <>

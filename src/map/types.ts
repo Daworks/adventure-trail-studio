@@ -1,5 +1,7 @@
 import type { MapMode, Project, RoutePoint, Waypoint } from "../domain/types";
 
+export type MapProvider = "kakao" | "osm";
+
 export type ProjectRenderCallbacks = {
   onMapStatus?: (status: MapRuntimeStatus) => void;
   onRenderInfo?: (info: ProjectRenderInfo) => void;
@@ -25,7 +27,9 @@ export type ProjectRenderCallbacks = {
 };
 
 export type MapRuntimeStatus = {
-  state: "loading" | "ready" | "error";
+  needsApiKey?: boolean;
+  provider?: MapProvider;
+  state: "loading" | "ready" | "fallback" | "error";
   message: string;
 };
 
@@ -43,5 +47,7 @@ export type MapAdapter = {
   renderProject(project: Project, callbacks: ProjectRenderCallbacks): void;
   searchAddress(query: string): Promise<RoutePoint>;
   setMode(mode: MapMode): void;
+  setProvider(provider: MapProvider): void;
   setView(center: RoutePoint, zoom: number): void;
+  updateKakaoApiKey(key: string): Promise<void>;
 };
