@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TourFlow Map Studio</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar left-panel" aria-label="프로젝트 제어">
+        <header class="brand-block">
+          <p class="eyebrow">TourFlow</p>
+          <h1>맵 스튜디오</h1>
+        </header>
+
+        <section class="panel-section">
+          <div class="section-title">
+            <span>코스 편집</span>
+            <span id="pointCount">0 pts</span>
+          </div>
+          <div class="tool-grid" role="toolbar" aria-label="코스 편집 도구">
+            <button class="tool-button active" data-tool="draw" title="코스 그리기"><span class="tool-icon">＋</span>그리기</button>
+            <button class="tool-button" data-tool="select" title="포인트 선택 및 이동"><span class="tool-icon">↕</span>편집</button>
+            <button class="tool-button" data-tool="insert" title="구간 사이에 포인트 삽입"><span class="tool-icon">⊕</span>삽입</button>
+            <button class="tool-button" data-tool="waypoint" title="웨이포인트 추가"><span class="tool-icon">⌖</span>핀</button>
+          </div>
+          <div class="button-row">
+            <button id="newSegmentBtn" class="secondary-button"><span class="button-icon">↳</span>새 구간</button>
+            <button id="fitRouteBtn" class="secondary-button"><span class="button-icon">⌕</span>전체 보기</button>
+          </div>
+          <button id="focusSegmentBtn" class="secondary-button full-button"><span class="button-icon">◎</span>선택 구간 보기</button>
+          <div class="button-row">
+            <button id="splitBtn" class="secondary-button"><span class="button-icon">⋔</span>나누기</button>
+            <button id="mergeBtn" class="secondary-button"><span class="button-icon">⇄</span>합치기</button>
+          </div>
+          <button id="deleteSegmentBtn" class="danger-button"><span class="button-icon">×</span>선택 구간 삭제</button>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-title">
+            <span>레이어</span>
+            <span id="mapModeText">일반</span>
+          </div>
+          <label class="toggle-line">
+            <input id="satelliteToggle" type="checkbox" />
+            <span>위성 지도</span>
+          </label>
+          <label class="toggle-line">
+            <input data-layer="routes" type="checkbox" checked />
+            <span>코스</span>
+          </label>
+          <label class="toggle-line">
+            <input data-layer="waypoints" type="checkbox" checked />
+            <span>웨이포인트</span>
+          </label>
+          <label class="toggle-line">
+            <input data-layer="warnings" type="checkbox" checked />
+            <span>주의 지점</span>
+          </label>
+          <label class="toggle-line">
+            <input data-layer="photos" type="checkbox" checked />
+            <span>사진</span>
+          </label>
+          <label class="toggle-line">
+            <input data-layer="labels" type="checkbox" checked />
+            <span>라벨</span>
+          </label>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-title">
+            <span>GPX</span>
+            <span>가져오기 / 내보내기</span>
+          </div>
+          <label class="file-drop" id="dropZone">
+            <input id="gpxInput" type="file" accept=".gpx,application/gpx+xml,text/xml" />
+            <span>GPX 파일을 드롭하거나 선택</span>
+          </label>
+          <div class="button-row">
+            <button id="exportTrackBtn" class="primary-button"><span class="button-icon">⇩</span>트랙 GPX</button>
+            <button id="exportRouteBtn" class="secondary-button"><span class="button-icon">⇩</span>루트 GPX</button>
+          </div>
+          <div id="gpxList" class="list compact-list gpx-list"></div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-title">
+            <span>구간</span>
+            <span id="segmentCount">1</span>
+          </div>
+          <div id="segmentList" class="list"></div>
+        </section>
+      </aside>
+
+      <section class="map-stage" aria-label="지도 편집기">
+        <div id="map" class="map">
+          <div id="tileLayer" class="tile-layer"></div>
+          <svg id="routeLayer" class="route-layer" aria-hidden="true"></svg>
+          <div id="markerLayer" class="marker-layer"></div>
+          <div id="crosshair" class="crosshair" aria-hidden="true"></div>
+        </div>
+        <form id="addressSearchForm" class="address-search" role="search">
+          <input id="addressSearchInput" type="search" placeholder="주소 검색" autocomplete="street-address" />
+          <button type="submit"><span class="button-icon">⌕</span>검색</button>
+          <span id="addressSearchStatus"></span>
+        </form>
+        <div class="map-toolbar">
+          <button id="zoomInBtn" class="icon-button" title="확대">＋</button>
+          <button id="zoomOutBtn" class="icon-button" title="축소">－</button>
+          <button id="undoBtn" class="icon-button" title="실행 취소">↶</button>
+          <button id="redoBtn" class="icon-button" title="다시 실행">↷</button>
+        </div>
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      </section>
+
+      <aside class="sidebar right-panel" aria-label="속성 편집기">
+        <section class="panel-section project-section">
+          <div class="section-title">
+            <span>프로젝트</span>
+            <span>로컬</span>
+          </div>
+          <label class="field-label">
+            이름
+            <input id="projectName" type="text" value="무제 투어링 코스" />
+          </label>
+          <label class="field-label">
+            설명
+            <textarea id="projectDescription" rows="4">어드벤처 코스 초안</textarea>
+          </label>
+          <label class="field-label">
+            작성자
+            <input id="projectAuthor" type="text" value="TourFlow" />
+          </label>
+          <label class="field-label inline-field">
+            평균 속도
+            <input id="avgSpeed" type="number" min="5" max="160" value="45" />
+            <span>km/h</span>
+          </label>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-title">
+            <span>선택 항목</span>
+            <span id="selectionType">없음</span>
+          </div>
+          <div id="selectionDetails" class="empty-copy">포인트나 웨이포인트를 선택하면 속성을 편집할 수 있습니다.</div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-title">
+            <span>웨이포인트</span>
+            <span id="waypointCount">0</span>
+          </div>
+          <div id="waypointList" class="list compact-list"></div>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="status-bar">
+      <span id="totalDistance">0.0 km</span>
+      <span id="eta">0h 00m</span>
+      <span id="segmentInfo">구간 1 · 0.0 km</span>
+      <span id="activeToolLabel">그리기 모드</span>
+      <span id="cursorPosition">위도 0.00000, 경도 0.00000</span>
+    </footer>
+
+    <script src="./src/map-adapter.js"></script>
+    <script src="./src/gpx.js"></script>
+    <script src="./src/app.js"></script>
+  </body>
+</html>

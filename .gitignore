@@ -1,0 +1,9 @@
+.env
+.env*.local
+node_modules/
+.next/
+.test-dist/
+target/
+tourmap.db
+backend/tourmap.db
+tsconfig.tsbuildinfo
